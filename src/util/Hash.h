@@ -30,6 +30,9 @@ SOFTWARE.
 #include <cstring>
 #include <cstdint>
 
+namespace molecular
+{
+
 typedef uint32_t Hash;
 
 /// Compile-time MurmurHash3
@@ -122,4 +125,5 @@ namespace HashUtils
 	constexpr Hash H(const char (&string)[size]) { return Murmur::Hash(string, size - 1); }
 }
 
+} // namespace
 #endif // HASH_H

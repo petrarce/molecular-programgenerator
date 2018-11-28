@@ -32,6 +32,9 @@ SOFTWARE.
 #include <map>
 #include "util/Hash.h"
 
+namespace molecular
+{
+
 /// Generates shader programs from a given set of inputs and outputs
 class ProgramGenerator
 {
@@ -158,4 +161,5 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 	return GenerateProgram(inputs, outputs, arraySizes, highQuality);
 }
 
+} // namespace
 #endif // PROGRAMGENERATOR_H

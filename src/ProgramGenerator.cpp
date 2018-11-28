@@ -34,6 +34,9 @@ SOFTWARE.
 #define LOG(x) std::cerr
 #endif
 
+namespace molecular
+{
+
 std::string EmitGlslDeclaration(
 		Hash variable,
 		const ProgramGenerator::VariableInfo& info,
@@ -341,3 +344,5 @@ bool ProgramGenerator::CompareFunctions::operator() (Function* f1, Function* f2)
 			return false;
 	}
 }
+
+} // namespace

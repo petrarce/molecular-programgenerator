@@ -28,6 +28,9 @@ SOFTWARE.
 
 #include <cctype>
 
+namespace molecular
+{
+
 /// A recursive-descent parser with backtracking
 /** Can be used as a scannerless parser.
 	@bug The actor is also invoked for decision paths which are later discarded. */
@@ -245,6 +248,7 @@ typedef Concatenation<Digit, Repetition<Digit> > UnsignedInteger;
 typedef Concatenation<Option<Char<'-'> >, UnsignedInteger> Integer;
 typedef Concatenation<Integer, Option<Concatenation<Char<'.'>, UnsignedInteger> >, Option<Concatenation<Char<'e'>, Integer> > > Real;
 
-}
+} // namespace parser
 
+} // namespace molecular
 #endif // PARSER_H
