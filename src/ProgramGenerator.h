@@ -23,14 +23,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef PROGRAMGENERATOR_H
-#define PROGRAMGENERATOR_H
+#ifndef MOLECULAR_PROGRAMGENERATOR_H
+#define MOLECULAR_PROGRAMGENERATOR_H
 
 #include <vector>
 #include <set>
 #include <unordered_map>
 #include <map>
 #include "util/Hash.h"
+
+namespace molecular
+{
 
 /// Generates shader programs from a given set of inputs and outputs
 class ProgramGenerator
@@ -158,4 +161,5 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 	return GenerateProgram(inputs, outputs, arraySizes, highQuality);
 }
 
-#endif // PROGRAMGENERATOR_H
+} // namespace
+#endif // MOLECULAR_PROGRAMGENERATOR_H

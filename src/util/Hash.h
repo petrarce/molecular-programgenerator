@@ -23,12 +23,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef HASH_H
-#define HASH_H
+#ifndef MOLECULAR_HASH_H
+#define MOLECULAR_HASH_H
 
 #include <string>
 #include <cstring>
 #include <cstdint>
+
+namespace molecular
+{
 
 typedef uint32_t Hash;
 
@@ -122,4 +125,5 @@ namespace HashUtils
 	constexpr Hash H(const char (&string)[size]) { return Murmur::Hash(string, size - 1); }
 }
 
-#endif // HASH_H
+} // namespace
+#endif // MOLECULAR_HASH_H

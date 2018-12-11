@@ -27,6 +27,9 @@ SOFTWARE.
 #include "util/Parser.h"
 #include <stdlib.h>
 
+namespace molecular
+{
+
 using namespace Parser;
 
 bool ProgramFile::Parse(char* begin, char* end)
@@ -143,3 +146,5 @@ void ProgramFile::ParserAction(int action, char* begin, char* end)
 		break;
 	}
 }
+
+} // namespace
