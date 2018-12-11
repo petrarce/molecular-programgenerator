@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef PROGRAMGENERATOR_H
-#define PROGRAMGENERATOR_H
+#ifndef MOLECULAR_PROGRAMGENERATOR_H
+#define MOLECULAR_PROGRAMGENERATOR_H
 
 #include <vector>
 #include <set>
@@ -162,4 +162,4 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 }
 
 } // namespace
-#endif // PROGRAMGENERATOR_H
+#endif // MOLECULAR_PROGRAMGENERATOR_H

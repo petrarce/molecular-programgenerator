@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef MOLECULAR_PARSER_H
+#define MOLECULAR_PARSER_H
 
 #include <cctype>
 
@@ -251,4 +251,4 @@ typedef Concatenation<Integer, Option<Concatenation<Char<'.'>, UnsignedInteger> 
 } // namespace parser
 
 } // namespace molecular
-#endif // PARSER_H
+#endif // MOLECULAR_PARSER_H

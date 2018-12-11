@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef PROGRAMFILE_H
-#define PROGRAMFILE_H
+#ifndef MOLECULAR_PROGRAMFILE_H
+#define MOLECULAR_PROGRAMFILE_H
 
 #include "ProgramGenerator.h"
 #include <list>
@@ -119,4 +119,4 @@ private:
 };
 
 } // namespace
-#endif // PROGRAMFILE_H
+#endif // MOLECULAR_PROGRAMFILE_H

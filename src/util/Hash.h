@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef HASH_H
-#define HASH_H
+#ifndef MOLECULAR_HASH_H
+#define MOLECULAR_HASH_H
 
 #include <string>
 #include <cstring>
@@ -126,4 +126,4 @@ namespace HashUtils
 }
 
 } // namespace
-#endif // HASH_H
+#endif // MOLECULAR_HASH_H
