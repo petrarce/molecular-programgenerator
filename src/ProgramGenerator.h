@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright (c) 2018 Fabian Herb
+Copyright (c) 2018-2019 Fabian Herb
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,7 @@ SOFTWARE.
 #include <set>
 #include <unordered_map>
 #include <map>
-#include "util/Hash.h"
+#include <molecular/util/Hash.h>
 
 namespace molecular
 {

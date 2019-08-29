@@ -8,6 +8,7 @@ add_library(molecular-programgenerator
 	src/ProgramGenerator.h
 	src/ProgramFile.cpp
 	src/ProgramFile.h
-	src/util/Hash.h
-	src/util/Parser.h
 )
+target_link_libraries(molecular-programgenerator PUBLIC molecular::util)
+add_library(molecular::programgenerator ALIAS molecular-programgenerator)
+target_include_directories(molecular-programgenerator PUBLIC .)
