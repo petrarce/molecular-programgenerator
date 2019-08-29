@@ -4,10 +4,10 @@ project(molecular-programgenerator)
 set(CMAKE_CXX_STANDARD 14)
 
 add_library(molecular-programgenerator
-	src/ProgramGenerator.cpp
-	src/ProgramGenerator.h
-	src/ProgramFile.cpp
-	src/ProgramFile.h
+	molecular/programgenerator/ProgramGenerator.cpp
+	molecular/programgenerator/ProgramGenerator.h
+	molecular/programgenerator/ProgramFile.cpp
+	molecular/programgenerator/ProgramFile.h
 )
 target_link_libraries(molecular-programgenerator PUBLIC molecular::util)
 add_library(molecular::programgenerator ALIAS molecular-programgenerator)
