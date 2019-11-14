@@ -27,6 +27,7 @@ SOFTWARE.
 #define MOLECULAR_PROGRAMFILE_H
 
 #include "ProgramGenerator.h"
+#include <stdexcept>
 #include <list>
 
 namespace molecular
