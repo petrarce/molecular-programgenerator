@@ -32,6 +32,8 @@ SOFTWARE.
 
 namespace molecular
 {
+namespace programgenerator
+{
 
 /// Reads configuration files for the ProgramGenerator
 /** @code
@@ -119,5 +121,6 @@ private:
 	VariableContainer mVariables;
 };
 
-} // namespace
+}
+} // namespace molecular
 #endif // MOLECULAR_PROGRAMFILE_H

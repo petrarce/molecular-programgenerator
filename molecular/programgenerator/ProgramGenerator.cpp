@@ -36,6 +36,8 @@ SOFTWARE.
 
 namespace molecular
 {
+namespace programgenerator
+{
 
 std::string EmitGlslDeclaration(
 		Hash variable,
@@ -345,4 +347,5 @@ bool ProgramGenerator::CompareFunctions::operator() (Function* f1, Function* f2)
 	}
 }
 
-} // namespace
+} // namespace programgenerator
+} // namespace molecular

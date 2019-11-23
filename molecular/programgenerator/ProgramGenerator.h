@@ -34,6 +34,8 @@ SOFTWARE.
 
 namespace molecular
 {
+namespace programgenerator
+{
 
 /// Generates shader programs from a given set of inputs and outputs
 class ProgramGenerator
@@ -161,5 +163,7 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 	return GenerateProgram(inputs, outputs, arraySizes, highQuality);
 }
 
-} // namespace
+} // namespace programgenerator
+} // namespace molecular
+
 #endif // MOLECULAR_PROGRAMGENERATOR_H

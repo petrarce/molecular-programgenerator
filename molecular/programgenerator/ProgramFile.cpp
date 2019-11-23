@@ -29,8 +29,9 @@ SOFTWARE.
 
 namespace molecular
 {
-
-using namespace Parser;
+namespace programgenerator
+{
+using namespace util::Parser;
 
 bool ProgramFile::Parse(char* begin, char* end)
 {
@@ -147,4 +148,5 @@ void ProgramFile::ParserAction(int action, char* begin, char* end)
 	}
 }
 
+}
 } // namespace
