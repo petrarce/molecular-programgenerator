@@ -38,6 +38,7 @@ namespace molecular
 {
 namespace programgenerator
 {
+using namespace util;
 
 std::string EmitGlslDeclaration(
 		Hash variable,

@@ -31,6 +31,7 @@ namespace molecular
 {
 namespace programgenerator
 {
+using namespace util;
 using namespace util::Parser;
 
 bool ProgramFile::Parse(char* begin, char* end)

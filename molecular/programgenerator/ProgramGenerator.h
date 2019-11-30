@@ -41,7 +41,7 @@ namespace programgenerator
 class ProgramGenerator
 {
 public:
-	typedef Hash Variable;
+	typedef util::Hash Variable;
 
 	/// Information about a variable
 	struct VariableInfo
