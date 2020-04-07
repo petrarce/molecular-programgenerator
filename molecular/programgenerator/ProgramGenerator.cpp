@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright (c) 2018 Fabian Herb
+Copyright (c) 2018-2020 Fabian Herb
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -54,6 +54,7 @@ std::string EmitGlslDeclaration(
 	return oss.str();
 }
 
+/// Input to EmitGlslProgram(), and maybe other emitters in the future
 struct ProgramEmitterInput
 {
 	std::string vertexCode;
@@ -65,6 +66,7 @@ struct ProgramEmitterInput
 	std::unordered_set<ProgramGenerator::Variable> fragmentAttributes;
 };
 
+/// Convert program generator output to actual GLSL text
 ProgramGenerator::ProgramText EmitGlslProgram(
 		const ProgramEmitterInput& input,
 		const std::set<ProgramGenerator::Variable>& outputs,
