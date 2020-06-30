@@ -1,0 +1,12 @@
+#!/bin/bash
+for i in $@; do
+	if [ ! -f ${i} ]; then
+		continue
+	fi
+	bison -d -v ${i} -o `echo ${i} | sed -e 's,.ypp,.tab.cpp,g'`
+
+	if [ ! $? == 0 ]; then
+		echo failed to generate lex files;
+		exit 1
+	fi
+done

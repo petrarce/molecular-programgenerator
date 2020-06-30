@@ -61,6 +61,7 @@ public:
 		std::string type;
 		Usage usage = Usage::kUniformOrLocal;
 		bool array = false;
+		int layoutLocation = {0};
 	};
 
 	/// Information about a function

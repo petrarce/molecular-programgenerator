@@ -27,8 +27,11 @@ SOFTWARE.
 #define MOLECULAR_PROGRAMFILE_H
 
 #include "ProgramGenerator.h"
+#include "GlslTranslator.tab.hpp"
 #include <stdexcept>
 #include <list>
+
+class ShaderParser;
 
 namespace molecular
 {
@@ -61,6 +64,8 @@ public:
 
 	const FunctionContainer& GetFunctions() const {return mFunctions;}
 	const VariableContainer& GetVariables() const {return mVariables;}
+	FunctionContainer& GetFunctions() {return mFunctions;}
+	VariableContainer& GetVariables() {return mVariables;}
 
 	void ParserAction(int action, char* begin, char* end);
 
@@ -119,6 +124,13 @@ private:
 
 	FunctionContainer mFunctions;
 	VariableContainer mVariables;
+public:
+	ProgramGenerator::Function& currentFunction() { return mCurrentFunction; }
+	ProgramGenerator::VariableInfo& currentVariable() { return mCurrentVariable; }
+	const ProgramGenerator::Function& currentFunction() const { return mCurrentFunction; }
+	const ProgramGenerator::VariableInfo& currentVariable() const { return mCurrentVariable; }
+
+
 };
 
 }

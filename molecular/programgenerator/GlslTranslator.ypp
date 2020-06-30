@@ -1,0 +1,174 @@
+%define api.prefix {preposit_formula_}
+%define api.pure full
+%define parse.error verbose
+%define parse.trace
+%verbose
+%locations
+//%parse-param {molecular::programgenerator::ProgramFile& progFile}
+%parse-param { yyscan_t scanner }
+%parse-param { molecular::programgenerator::ProgramFile& progFile }
+%lex-param   { yyscan_t scanner }
+%define api.value.type {std::string}
+%token		attr identifier source vertex fragment prio out
+%code requires {
+	#include <string>
+	namespace molecular
+	{
+	namespace programgenerator
+	{
+	class ProgramFile;
+	}
+	}
+	typedef void* yyscan_t;
+}
+%code provides
+{
+	#ifndef YYSTYPE
+	#define YYSTYPE PREPOSIT_FORMULA_STYPE
+	#define YYLTYPE PREPOSIT_FORMULA_LTYPE
+	#endif
+}
+
+%{
+#include <string>
+#include <sstream>
+
+#include "GlslTranslator.tab.hpp"
+#include "GlslTranslator.lex.hpp"
+#include "ProgramFile.h"
+#include "ProgramGenerator.h"
+#include <molecular/util/Hash.h>
+
+using namespace molecular::programgenerator;
+using namespace molecular::util;
+using namespace std;
+
+int preposit_formula_error(const PREPOSIT_FORMULA_LTYPE *locp,
+						   const yyscan_t scanner,
+						   molecular::programgenerator::ProgramFile& prfile,
+						   const char* msg);
+
+
+%}
+%%
+S:					FINAL
+					{
+						fprintf(stderr,
+								"DEBUG TRANSLATED SOURCE:\n%s",
+								$1.c_str());
+					}
+
+FINAL:				SNIPPETS { $$ = $1;}
+SNIPPETS:			SNIPPET
+				|	SNIPPET SNIPPETS
+					{
+						$$ = $1 + "\n" + $2;
+					}
+
+SNIPPET:			FUNATTRIBUTES FUNCTION
+					{
+						$$ = $1 + " " + $2;
+					}
+
+FUNATTRIBUTES:		STAGE PRIORITY
+					{
+						$$ = $1 + " " + $2;
+					}
+
+PRIORITY:			%empty {$$ = "";}
+				|	prio
+					{
+						$$ = "prio=" + $1;
+						progFile.currentFunction().priority = std::strtol($1.c_str(), nullptr, 10);
+					}
+
+STATUS:				%empty { $$ = ""; }
+				|	out
+					{
+						$$ = "out";
+					}
+
+STAGE:				vertex
+					{
+						$$ = "vertex";
+						progFile.currentFunction().stage = ProgramGenerator::Function::Stage::kVertexStage;
+					}
+				|	fragment
+					{
+						$$ = "fragment";
+						progFile.currentFunction().stage = ProgramGenerator::Function::Stage::kFragmentStage;
+					}
+
+FUNCTION:		STATUS TYPE identifier '(' ARGS ')' '{' source '}'
+				{
+					$$ = $1 + " " + $2 + "" + $3 + "(" + $5 + ")" +
+						 "\n{" + $8 + "}\n";
+					progFile.currentVariable().name = $3;
+					progFile.currentVariable().type = $2;
+					if (!$1.empty())
+						progFile.currentVariable().usage = ProgramGenerator::VariableInfo::Usage::kOutput;
+
+					progFile.currentFunction().output = HashUtils::MakeHash($3);
+					progFile.currentFunction().source = $8;
+
+					progFile.GetFunctions().push_back(progFile.currentFunction());
+					progFile.GetVariables().push_back(progFile.currentVariable());
+					progFile.currentFunction() = ProgramGenerator::Function();
+					progFile.currentVariable() = ProgramGenerator::VariableInfo();
+				}
+
+ARGS:				%empty { $$ = "";}
+				|	ARG','ARGS
+					{
+						$$ = $1 + "," + $3;
+					}
+				|	ARG { $$ = $1;}
+
+ARG:				ARGATTRIBUTES TYPE identifier
+					{
+						$$ = $1 + " " + $2 + " " + $3;
+						progFile.currentFunction().inputs.push_back(HashUtils::MakeHash($3));
+						progFile.currentVariable().name = $3;
+						progFile.currentVariable().type = $2;
+						progFile.GetVariables().push_back(progFile.currentVariable());
+						progFile.currentVariable() = ProgramGenerator::VariableInfo(); // Restore defaults
+
+					}
+
+TYPE:				identifier
+					{
+						$$ = $1;
+					}
+
+ARGATTRIBUTES:		%empty { $$ = ""; }
+				|	attr
+					{
+						$$ = $1;
+						progFile.currentVariable().usage = ProgramGenerator::VariableInfo::Usage::kAttribute;
+						progFile.currentVariable().layoutLocation = strtol($1.c_str(), NULL, 10);
+					}
+
+%%
+
+int preposit_formula_error(const PREPOSIT_FORMULA_LTYPE *locp,
+						   const yyscan_t scanner,
+						   molecular::programgenerator::ProgramFile& prfile,
+						   const char* msg)
+{
+	fprintf(stderr, "line %d: %s\n", locp->first_line, msg);
+	return -1;
+}
+
+#ifdef DEBUG_PARSER
+int main(int argc, char** argv){
+    yyscan_t scanner;
+    if (preposit_formula_lex_init(&scanner)) exit(1);
+    YY_BUFFER_STATE buf = preposit_formula__scan_string(argv[1], scanner);
+    string res;
+    molecular::programgenerator::ProgramFile prfile("", 0);
+    if (preposit_formula_parse(scanner, prfile)) exit(1);
+    preposit_formula__delete_buffer(buf, scanner);
+    preposit_formula_lex_destroy(scanner);
+    return 0;
+}
+#endif
