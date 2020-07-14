@@ -80,7 +80,7 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 		if(info.usage != ProgramGenerator::VariableInfo::Usage::kAttribute)
 			vertexGlobalsString << "uniform ";
 		else
-			vertexGlobalsString << "layout (location = " << info.layoutLocation << ") in";
+			vertexGlobalsString << "layout (location = " << info.layoutLocation << ") in ";
 		vertexGlobalsString << EmitGlslDeclaration(it, info, arraySizes);
 	}
 
