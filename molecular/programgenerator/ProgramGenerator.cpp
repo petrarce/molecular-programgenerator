@@ -57,12 +57,36 @@ std::string EmitGlslDeclaration(
 /// Input to EmitGlslProgram(), and maybe other emitters in the future
 struct ProgramEmitterInput
 {
+	/// Body of main() of the vertex shader without local variable declarations
+	/** Consists of concatenated bodies of functions from the snippet files. */
 	std::string vertexCode;
+
+	/// Body of main() of the fragment shader without local variable declarations
+	/** Consists of concatenated bodies of functions from the snippet files. */
 	std::string fragmentCode;
+
+	/// Inputs to vertex shader, both attributes and uniforms
+	/** If a variable is an attribute or an uniform is decided based on information in
+		ProgramGenerator::VariableInfo */
 	std::unordered_set<ProgramGenerator::Variable> vertexInputs;
+
+	/// Local variables of the vertex shader
+	/** Can also become "out" variables if the same variable is used in the fragment shader. */
 	std::unordered_set<ProgramGenerator::Variable> vertexLocals;
+
+	/// Uniforms used in fragment shader
 	std::unordered_set<ProgramGenerator::Variable> fragmentUniforms;
+
+	/// Local variables in fragment shader
+	/** Can also become "in" or "out" variables: If they were used as local variables in the vertex
+		shader, they are declared as "out" in the vertex shader and as "in" in the fragment shader.
+		If they are requested as an output of the program, they are declared as "out" in the
+		fragment shader. */
 	std::unordered_set<ProgramGenerator::Variable> fragmentLocals;
+
+	/// Attributes used in fragment shader
+	/** Attributes generally arrive in the vertex shader. If they are required in the fragment
+		shader however, they need to be passed into it explicitly. */
 	std::unordered_set<ProgramGenerator::Variable> fragmentAttributes;
 };
 
@@ -76,6 +100,7 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 	std::ostringstream vertexGlobalsString, vertexLocalsString;
 	for(auto it: input.vertexInputs)
 	{
+		// Inputs can either be uniforms or attributes:
 		auto info = variableInfos.at(it);
 		if(info.usage != ProgramGenerator::VariableInfo::Usage::kAttribute)
 			vertexGlobalsString << "uniform ";
@@ -89,6 +114,8 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 		auto info = variableInfos.at(it);
 		if(strncmp(info.name.data(), "gl_", 3)) // Do not declare predefined variables
 		{
+			/* If this is also used as a local variable in the fragment shader, declare as "out".
+				It is later declared as "in" in the fragment shader. */
 			if(input.fragmentLocals.count(it))
 				vertexGlobalsString << "out " << EmitGlslDeclaration(it, info, arraySizes);
 			else
@@ -107,10 +134,13 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 	for(auto it: input.fragmentLocals)
 	{
 		auto info = variableInfos.at(it);
+		// If this is requested as an output of the program, declare as "out":
 		if(outputs.count(it))
 			fragmentGlobalsString << "out " << EmitGlslDeclaration(it, info, arraySizes);
 		else
 		{
+			/* If this is also used as a local variable in the vertex shader, declare as "in". It
+				was previously declared as "out" in the vertex shader: */
 			if(input.vertexLocals.count(it))
 				fragmentGlobalsString << "in " << EmitGlslDeclaration(it, info, arraySizes);
 			else
@@ -118,18 +148,25 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 		}
 	}
 
-	// Passing vertex shader attributes to fragment shader:
+	/* Attributes are only accessible in the vertex shader. If they need to be accessed in the
+		fragment shader, they must be passed into it: */
 	std::ostringstream vertexToFragmentPassingCode;
 	for(auto it: input.fragmentAttributes)
 	{
 		auto info = variableInfos.at(it);
+		// Declare an "in" variable (attribute name prefixed with "vf_") in fragment shader:
 		fragmentGlobalsString << "in " << info.type << " vf_" << info.name << ";\n";
+		// Declare same variable as "out" in vertex shader:
 		vertexGlobalsString << "out " << info.type << " vf_" << info.name << ";\n";
 //		fragmentLocalsString << "\t" << info.Declaration(arraySizes[*it]);
+		// Assign attribute value to new "vf_" variable in vertex shader:
 		vertexToFragmentPassingCode << "\tvf_" << info.name << " = " << info.name << ";\n";
+		/* Declare variable with the same name as the attribute in fragment shader. Assign value
+			of "vf_" variable to it: */
 		fragmentLocalsString << "\t" << info.name << " = vf_" << info.name << ";\n";
 	}
 
+	// Assemble final shader text:
 	std::ostringstream vertexShader, fragmentShader;
 
 	vertexShader << vertexGlobalsString.str() << std::endl;
