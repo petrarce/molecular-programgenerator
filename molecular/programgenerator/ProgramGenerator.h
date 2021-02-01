@@ -131,9 +131,13 @@ private:
 	std::string ToString(const std::set<Variable>& varSet);
 
 	/// Functor that compares two Function objects
-	class CompareFunctions : public std::binary_function<bool, Function*,Function*>
+	class CompareFunctions
 	{
 	public:
+		using first_argument_type = bool;
+		using second_argument_type = Function*;
+		using result_type = Function*;
+
 		CompareFunctions(bool highQuality) : mHighQuality(highQuality) {}
 		bool operator() (Function* f1, Function* f2);
 
