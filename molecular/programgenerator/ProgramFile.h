@@ -42,7 +42,7 @@ namespace programgenerator
 	number = [ '-' ], digit, { digit } ;
 	identifier = character, { character | digit } ;
 	parameter = [whitespace], identifier, whitespace, identifier, [whitespace] ;
-	attribute = 'fragment' | 'vertex' | 'low_q' | 'prio=', number ;
+	attribute = 'fragment' | 'vertex' | 'geometry' | 'low_q' | 'prio=', number | 'in_prim=', identifier | 'out_prim=', identifier | 'max_vert=', number | 'prim_dscr=', (number, ',')+ | 'auto_emit=', [false, true] | 'pure'
 	body = '{', ?text with balanced parantheses?, '}' ;
 	function = [whitespace], {attribute, whitespace}, identifier, whitespace, identifier, [whitespace], '(', [parameter, {',', parameter}], ')', [whitespace], body ;
 	@endcode
@@ -76,8 +76,17 @@ private:
 		kArray,
 		kType,
 		kFunctionName,
+		kFunction,
 		kParameterName,
-		kBody
+		kBody,
+		kInPrimitive,
+		kMaxVertices,
+		kOutPrimitive,
+		kGeometryStage,
+		kGeometryPrimitiveDescription,
+		kAutoEmission,
+		kPure,
+		kPureFunction,
 	};
 
 	class Body

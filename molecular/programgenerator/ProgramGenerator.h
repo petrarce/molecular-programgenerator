@@ -31,6 +31,7 @@ SOFTWARE.
 #include <unordered_map>
 #include <map>
 #include <molecular/util/Hash.h>
+#include <memory>
 
 namespace molecular
 {
@@ -63,6 +64,24 @@ public:
 		bool array = false;
 	};
 
+	///Geometry shader information
+	struct GSInfo {
+		///Input primitive type. See https://www.khronos.org/opengl/wiki/Geometry_Shader for possible variants
+		std::string mInPrimitive {"points"};
+		///Output primitive type. See https://www.khronos.org/opengl/wiki/Geometry_Shader for possible variants
+		std::string mOutPrimitive {"points"};
+		/// Maximum number of vertices that will be written by a single invocation of the GS
+		size_t mMaxVertices {1};
+		/// Description of the primitive for automatic EmitVertex/EndPrimitive declaration
+		/** Each value shows how many vertices should be emitted before each EndPrimitive()*/
+		std::vector<size_t> primitiveDescription;
+		/// State variable. Determines if geometry shader turned on/off
+		bool enabled {false};
+		///State variable. Determines if automatic EmitVertex/EndPrimitive is enabled
+		bool mEnableAutoEmission {true};
+		//TODO: add streaming and instancing support
+	};
+
 	/// Information about a function
 	/** @see CompareFunctions */
 	struct Function
@@ -70,11 +89,18 @@ public:
 		enum class Stage
 		{
 			kVertexStage,
-			kFragmentStage
+			kFragmentStage,
+			kGeometryStage,
 		};
 
 		std::vector<Variable> inputs;
-		std::string source;
+		/// Input to function mapping, computed during dependency resolution
+		std::map<Variable, Function*> inputFunctions;
+		/// Source code for of the function. 
+		/** For Geometry shader, it is allowed to have multiple body declaration.
+			Generator will append all snippets and correctly generate EndVertex/EndPrimitive 
+			for each snippet*/
+		std::vector<std::string> source;
 		Variable output = 0;
 
 		/// Input variable from which the array size of the output variable is derived
@@ -89,6 +115,16 @@ public:
 
 		/// Simple quality selector
 		bool highQuality = true;
+		
+		/// Determines if this function is pure function
+		bool pureFunction = false;
+
+		//Geometry shader information
+		std::shared_ptr<GSInfo> gsInfo;
+		
+		/// For debug purposes
+		std::string name;
+		std::vector<std::string> input_names;
 	};
 
 	/// Output of the program generator
@@ -96,6 +132,7 @@ public:
 	{
 		std::string vertexShader;
 		std::string fragmentShader;
+		std::string geometryShader;
 	};
 
 	/// Generate program from separate inputs and outputs
@@ -121,8 +158,11 @@ private:
 	typedef std::unordered_map<Variable, VariableInfo> VariableMap;
 	typedef std::multimap<Variable, Function> FunctionMap;
 
-	/// Recursively find functions that provide a given output
-	std::vector<Function*> FindFunctions(const std::set<Variable>& inputs, Variable output, bool highQuality);
+	/// Find alternatives for a given candidate
+	std::vector<ProgramGenerator::Function*> FindCandidateFunctions(const Variable& candidate, bool highQuality);
+	/// Find functions that provide a given output
+	std::vector<ProgramGenerator::Function*> FindFunctions(const std::set<Variable>& inputs, Variable output, bool highQuality, size_t& baseGSAffinity);
+
 
 	/// Set duplicate functions to nullptr
 	static void RemoveDuplicates(std::vector<Function*>& functions);
@@ -148,6 +188,7 @@ private:
 	/// Maps outputs to functions
 	FunctionMap mFunctions;
 	VariableMap mVariableInfos;
+	GSInfo mGeometryShaderInfo;
 };
 
 template<class Iterator>

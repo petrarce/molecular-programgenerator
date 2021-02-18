@@ -28,6 +28,7 @@ SOFTWARE.
 #include <algorithm>
 #include <stdexcept>
 #include <unordered_set>
+#include <cassert>
 
 #ifndef LOG
 #include <iostream>
@@ -40,6 +41,36 @@ namespace programgenerator
 {
 using namespace util;
 
+//static std::string printFunctions(const std::vector<ProgramGenerator::Function*>& functions)
+//{
+//	std::stringstream functionsTrace;
+//	functionsTrace << "List of functions:\n";
+//	for(auto f : functions)
+//	{
+//		if(f == nullptr)
+//			continue;
+//		functionsTrace << ((f->stage == ProgramGenerator::Function::Stage::kVertexStage) ? "vertex ":
+//					 ((f->stage == ProgramGenerator::Function::Stage::kFragmentStage) ? "fragment " : "geometry "));
+//		functionsTrace << "prio:" << f->priority << " ";
+//		functionsTrace << "hq: " << (f->highQuality ? "true " : "false ");
+//		auto gsInfo = f->gsInfo;
+//		if(gsInfo)
+//			functionsTrace << "inprim:" << gsInfo->mInPrimitive
+//						<< " outprim:" << gsInfo->mOutPrimitive
+//						<< " maxvert:" << gsInfo->mMaxVertices << " ";
+						
+//		if(f->stage == ProgramGenerator::Function::Stage::kGeometryStage)
+//			functionsTrace << "affinity:" << f->source.size() << " ";
+
+//		functionsTrace << f->name << "(";
+//		for(auto input: f->input_names)
+//			functionsTrace << input << ",";
+//		functionsTrace << ")\n";
+//	}
+//	functionsTrace << std::endl;
+//	return functionsTrace.str();
+//}
+
 std::string EmitGlslDeclaration(
 		Hash variable,
 		const ProgramGenerator::VariableInfo& info,
@@ -48,15 +79,19 @@ std::string EmitGlslDeclaration(
 	std::ostringstream oss;
 	oss << info.type << " " << info.name;
 	if(info.array)
-		oss << "[" << arraySizes.at(variable) << "];\n";
-	else
-		oss << ";\n";
+		oss << "[" << arraySizes.at(variable) << "]";
 	return oss.str();
 }
 
 /// Input to EmitGlslProgram(), and maybe other emitters in the future
 struct ProgramEmitterInput
 {
+	/// Pure functions source code that is used in vertex shader
+	std::string vertexFunctionsCode;
+	/// Pure functions source code that is used in fragment shader
+	std::string fragmentFunctionsCode;
+	/// Pure functions source code that is used in geometry shader
+	std::string geometryFunctionsCode;
 	/// Body of main() of the vertex shader without local variable declarations
 	/** Consists of concatenated bodies of functions from the snippet files. */
 	std::string vertexCode;
@@ -64,7 +99,8 @@ struct ProgramEmitterInput
 	/// Body of main() of the fragment shader without local variable declarations
 	/** Consists of concatenated bodies of functions from the snippet files. */
 	std::string fragmentCode;
-
+	/// Body of main() of geometry shader
+	std::vector<std::string> geometryCode;
 	/// Inputs to vertex shader, both attributes and uniforms
 	/** If a variable is an attribute or an uniform is decided based on information in
 		ProgramGenerator::VariableInfo */
@@ -88,6 +124,14 @@ struct ProgramEmitterInput
 	/** Attributes generally arrive in the vertex shader. If they are required in the fragment
 		shader however, they need to be passed into it explicitly. */
 	std::unordered_set<ProgramGenerator::Variable> fragmentAttributes;
+	/// Geometry shader locals
+	std::unordered_set<ProgramGenerator::Variable> geometryLocals;
+	/// Geometry shader uniforms
+	std::unordered_set<ProgramGenerator::Variable> geometryUniforms;
+	/// Geometry shader info data
+	/** E.g. input primitive, output primitive, etc.
+	*/
+	ProgramGenerator::GSInfo geometryShaderInfo;
 };
 
 /// Convert program generator output to actual GLSL text
@@ -97,16 +141,17 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 		const std::unordered_map<ProgramGenerator::Variable, int>& arraySizes,
 		const std::unordered_map<ProgramGenerator::Variable, ProgramGenerator::VariableInfo>& variableInfos)
 {
-	std::ostringstream vertexGlobalsString, vertexLocalsString;
+
+	std::ostringstream vertexInputsString, vertexGlobalsString, vertexLocalsString;
+	std::vector<std::string> vertexOutputs;
 	for(auto it: input.vertexInputs)
 	{
 		// Inputs can either be uniforms or attributes:
 		auto info = variableInfos.at(it);
 		if(info.usage != ProgramGenerator::VariableInfo::Usage::kAttribute)
-			vertexGlobalsString << "uniform ";
+			vertexGlobalsString << "uniform " << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
 		else
-			vertexGlobalsString << "in ";
-		vertexGlobalsString << EmitGlslDeclaration(it, info, arraySizes);
+			vertexInputsString << "in " << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
 	}
 
 	for(auto it: input.vertexLocals)
@@ -116,19 +161,46 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 		{
 			/* If this is also used as a local variable in the fragment shader, declare as "out".
 				It is later declared as "in" in the fragment shader. */
-			if(input.fragmentLocals.count(it))
-				vertexGlobalsString << "out " << EmitGlslDeclaration(it, info, arraySizes);
+			if(input.fragmentLocals.count(it) || input.geometryLocals.count(it))
+				vertexOutputs.push_back(EmitGlslDeclaration(it, info, arraySizes));
 			else
-				vertexLocalsString << "\t" << EmitGlslDeclaration(it, info, arraySizes);
+				vertexLocalsString << "\t" << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
 		}
 	}
+	
+	std::ostringstream geometryGlobalsString, geometryLocalsString,
+						geometryLayout;
+	std::vector<std::string> geometryOutputs;
+	for(auto it : input.geometryLocals)
+	{
+		auto info = variableInfos.at(it);
+		if(strncmp(info.name.data(), "gl_", 3))
+		{
+			if(input.fragmentLocals.count(it))
+				geometryOutputs.push_back(EmitGlslDeclaration(it, info, arraySizes));
+			else if(!input.vertexLocals.count(it))
+				geometryLocalsString << "\t" << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
+		}
+	}
+	
+	for(auto it : input.geometryUniforms)
+	{
+		auto info = variableInfos.at(it);
+		geometryGlobalsString << "uniform " << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
+	}
+	
+	//set up geometry shader layout
+	geometryLayout << "layout(" << input.geometryShaderInfo.mInPrimitive << ") in;\n";
+	geometryLayout << "layout(" << input.geometryShaderInfo.mOutPrimitive <<
+		", max_vertices = " << input.geometryShaderInfo.mMaxVertices << ") out;\n";
 
-	std::ostringstream fragmentGlobalsString, fragmentLocalsString;
-
+	std::ostringstream fragmentInputsString, fragmentOutputsString,
+						fragmentGlobalsString, fragmentLocalsString;
+	
 	for(auto it: input.fragmentUniforms)
 	{
 		auto info = variableInfos.at(it);
-		fragmentGlobalsString << "uniform " << EmitGlslDeclaration(it, info, arraySizes);
+		fragmentGlobalsString << "uniform " << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
 	}
 
 	for(auto it: input.fragmentLocals)
@@ -136,20 +208,17 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 		auto info = variableInfos.at(it);
 		// If this is requested as an output of the program, declare as "out":
 		if(outputs.count(it))
-			fragmentGlobalsString << "out " << EmitGlslDeclaration(it, info, arraySizes);
+			fragmentOutputsString << "out " << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
 		else
 		{
-			/* If this is also used as a local variable in the vertex shader, declare as "in". It
-				was previously declared as "out" in the vertex shader: */
-			if(input.vertexLocals.count(it))
-				fragmentGlobalsString << "in " << EmitGlslDeclaration(it, info, arraySizes);
-			else
-				fragmentLocalsString << "\t" << EmitGlslDeclaration(it, info, arraySizes);
+			if(!(input.vertexLocals.count(it) || input.geometryLocals.count(it)))
+				fragmentLocalsString << "\t" << EmitGlslDeclaration(it, info, arraySizes) << ";\n";
 		}
 	}
-
-	/* Attributes are only accessible in the vertex shader. If they need to be accessed in the
-		fragment shader, they must be passed into it: */
+	
+	// Passing vertex shader attributes to fragment shader:
+	//TODO: add geometry shader support (problematic since GS source itself should be modified)
+	//WARNING: this will not work if geometry shader will be enabled
 	std::ostringstream vertexToFragmentPassingCode;
 	for(auto it: input.fragmentAttributes)
 	{
@@ -167,21 +236,106 @@ ProgramGenerator::ProgramText EmitGlslProgram(
 	}
 
 	// Assemble final shader text:
-	std::ostringstream vertexShader, fragmentShader;
+	std::ostringstream vertexShader, fragmentShader, geometryShader;
 
+	//generate vertex shader
 	vertexShader << vertexGlobalsString.str() << std::endl;
+	vertexShader << vertexInputsString.str() << std::endl;
+	std::string outVarPrefix = input.geometryShaderInfo.enabled ? "\t" : "out ";
+	std::string inVarPrefix = input.geometryShaderInfo.enabled ? "\t" : "in ";
+	if(input.geometryShaderInfo.enabled && !vertexOutputs.empty())
+		vertexShader << "out VS_OUT {\n";
+	for(const auto& out : vertexOutputs)
+		vertexShader << outVarPrefix << out << ";\n";
+	vertexShader << ((input.geometryShaderInfo.enabled && !vertexOutputs.empty()) ? "};\n" : "");
+	vertexShader << input.vertexFunctionsCode << std::endl;
 	vertexShader << "void main()\n{\n" << vertexLocalsString.str() << "\n" << input.vertexCode << vertexToFragmentPassingCode.str() << "}\n";
+
+	//generate fragment shader
+	if(input.geometryShaderInfo.enabled && !geometryOutputs.empty())
+	{
+		fragmentShader << "in GS_OUT {\n";
+		for(const auto& in : geometryOutputs)
+			fragmentShader << inVarPrefix << in << ";\n";
+	} else
+		for(const auto& in : vertexOutputs)
+			fragmentShader << inVarPrefix << in << ";\n";
+
+	fragmentShader << ((input.geometryShaderInfo.enabled && !geometryOutputs.empty()) ? "};\n" : "");
+
+	fragmentShader << fragmentOutputsString.str() << std::endl;
 	fragmentShader << fragmentGlobalsString.str() << std::endl;
+	fragmentShader << input.fragmentFunctionsCode << std::endl;
 	fragmentShader << "void main()\n{\n" << fragmentLocalsString.str() << "\n" << input.fragmentCode << "}\n";
 
+	//generate geometry shader
+	geometryShader << geometryLayout.str() << geometryGlobalsString.str() << std::endl;
+	if(!vertexOutputs.empty())
+		geometryShader << "in VS_OUT {\n";
+	for(const auto& in : vertexOutputs)
+		geometryShader << "\t" << in << ";\n";
+	geometryShader << ((!vertexOutputs.empty()) ? "} gs_in[];\n" : "");
+
+	if(!geometryOutputs.empty())
+		geometryShader << "out GS_OUT {\n";
+	for(const auto& out : geometryOutputs)
+		geometryShader << "\t" << out << ";\n";
+	geometryShader << ((!geometryOutputs.empty()) ?  "} gs_out;\n" : "");
+
+	geometryShader << input.geometryFunctionsCode << std::endl;
+	geometryShader << "void main()\n{\n" <<  "\n" << geometryLocalsString.str();
+	auto primitiveDescription = input.geometryShaderInfo.primitiveDescription;
+	if(!primitiveDescription.size())
+		//by default EndPrimitive after all vertices are emitted
+		primitiveDescription.push_back(input.geometryCode.size());
+	for(size_t verticesEmitted = 0, i = 0; i < input.geometryCode.size(); i++)
+	{
+		geometryShader << input.geometryCode[i] << "\n";
+		if(!input.geometryShaderInfo.mEnableAutoEmission)
+			continue;
+		
+		geometryShader << "\tEmitVertex();\n";
+		verticesEmitted++;
+//		LOG(DEBUG) << "verticesEmitted:" << verticesEmitted << " primitiveDescription.front():" << ((primitiveDescription.size() > 0) ?
+//																									 std::to_string(primitiveDescription.front()) :
+//																									 std::string("empty"));
+		if(primitiveDescription.size() && 
+			verticesEmitted == primitiveDescription.front())
+		{
+			std::cout << "Ending Primitive\n";
+			geometryShader << "\tEndPrimitive();\n";
+			verticesEmitted = 0;
+			primitiveDescription.erase(primitiveDescription.begin());
+		}
+	}
+	geometryShader << "\n}\n";
+	
 	ProgramGenerator::ProgramText text;
 	text.vertexShader = vertexShader.str();
 	text.fragmentShader = fragmentShader.str();
+	if(input.geometryShaderInfo.enabled)
+		text.geometryShader = geometryShader.str();
 
-//	std::cerr << vertexShader.str() << std::endl << fragmentShader.str() << std::endl;
+//	LOG(DEBUG) << "VERTEX SHADER:\n" << text.vertexShader << std::endl;
+//	LOG(DEBUG) << "FRAGMENT SHADER:\n" << text.fragmentShader << std::endl;
+//	LOG(DEBUG) << "GEOMETRY SHADER:\n" << (input.geometryShaderInfo.enabled?text.geometryShader:"DISABLED") << std::endl;
 
 	return text;
 }
+
+std::vector<ProgramGenerator::Function*> ProgramGenerator::FindCandidateFunctions(const Variable& candidate, bool highQuality)
+{
+	auto result = mFunctions.equal_range(candidate);
+	// Sort found functions by quality, priority, number of inputs:
+	std::vector<Function*> candidateFunctions;
+	for(auto fIt = result.first; fIt != result.second; ++fIt)
+		candidateFunctions.push_back(&(fIt->second));
+
+	CompareFunctions comparator(highQuality);
+	std::sort(candidateFunctions.begin(), candidateFunctions.end(), comparator);
+	return candidateFunctions;
+};
+
 
 ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 		const std::set<Variable>& inputs,
@@ -193,16 +347,19 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 	std::unordered_map<Variable, int> arraySizes = inputArraySizes;
 
 	// Find execution paths for all outputs:
+	size_t gsAffinity = 0;
 	for(auto it: outputs)
 	{
-		std::vector<Function*> foundFunctions = FindFunctions(inputs, it, highQuality);
+		auto foundFunctions = FindFunctions(inputs, it, highQuality, gsAffinity);
 		// Concatenate found functions:
 		functions.insert(functions.end(), foundFunctions.begin(), foundFunctions.end());
 	}
 
 	RemoveDuplicates(functions); // Sets duplicates to nullptr
+//	LOG(DEBUG) << printFunctions(functions);
 
-	std::ostringstream vertexCode, fragmentCode;
+	std::ostringstream vertexCode, fragmentCode, vertexFunctionsCode, fragmentFunctionsCode, geometryFunctionsCode;
+	std::vector<std::ostringstream> geometryCode;
 	ProgramEmitterInput emitterInput;
 
 	// Functions are ordered with outputs first, so reverse:
@@ -211,6 +368,19 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 		Function* func = *rit;
 		if(!func)
 			continue; // Skip duplicate filtered by RemoveDuplicates()
+		
+		// Write pure function definition to source snippet and continue
+		if(func->pureFunction)
+		{
+			if(func->stage == Function::Stage::kVertexStage)
+				vertexFunctionsCode << func->source[0];
+			else if(func->stage == Function::Stage::kVertexStage)
+				fragmentFunctionsCode << func->source[0];
+			else
+				geometryFunctionsCode << func->source[0];
+			continue;
+		}
+			
 
 		// Set output array size from input array size:
 		VariableMap::iterator iit = mVariableInfos.find(func->output);
@@ -223,18 +393,36 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 		// Write function code and collect all function outputs:
 		if(func->stage == Function::Stage::kVertexStage)
 		{
-			vertexCode << "\t" << func->source << std::endl;
+			vertexCode << "\t" << func->source[0] << std::endl;
 			emitterInput.vertexLocals.insert(func->output);
 		}
+		else if(func->stage == Function::Stage::kFragmentStage)
+		{
+			fragmentCode << "\t" << func->source[0] << std::endl;
+			emitterInput.fragmentLocals.insert(func->output);
+		} 
 		else
 		{
-			fragmentCode << "\t" << func->source << std::endl;
-			emitterInput.fragmentLocals.insert(func->output);
+			if(geometryCode.size() == 0)
+				geometryCode.resize(func->source.size());
+			assert(geometryCode.size() == func->source.size());
+			for(size_t i = 0; i < geometryCode.size(); i++)
+			{
+				geometryCode[i] << "\t" << func->source[i] << std::endl;
+			}
+			emitterInput.geometryLocals.insert(func->output);
+			if(func->gsInfo)
+				emitterInput.geometryShaderInfo = *func->gsInfo;
+			emitterInput.geometryShaderInfo.enabled = true;
 		}
 
 		// Collect all function inputs:
 		for(auto it: func->inputs)
 		{
+			auto inputFunction = func->inputFunctions.find(it);
+			if(inputFunction != func->inputFunctions.end() && inputFunction->second->pureFunction)
+				continue;
+			
 			if(func->stage == Function::Stage::kVertexStage)
 			{
 				if(inputs.count(it))
@@ -242,7 +430,7 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 				else
 					emitterInput.vertexLocals.insert(it);
 			}
-			else
+			else if(func->stage == Function::Stage::kFragmentStage)
 			{
 				if(inputs.count(it))
 				{
@@ -260,6 +448,13 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 				else
 					emitterInput.fragmentLocals.insert(it);
 			}
+			else
+			{
+				if(inputs.count(it))
+					emitterInput.geometryUniforms.insert(it);
+				else
+					emitterInput.geometryLocals.insert(it);
+			}
 		}
 	}
 
@@ -268,6 +463,12 @@ ProgramGenerator::ProgramText ProgramGenerator::GenerateProgram(
 
 	emitterInput.vertexCode = vertexCode.str();
 	emitterInput.fragmentCode = fragmentCode.str();
+	emitterInput.vertexFunctionsCode = vertexFunctionsCode.str();
+	emitterInput.fragmentFunctionsCode = fragmentFunctionsCode.str();
+	emitterInput.geometryFunctionsCode = geometryFunctionsCode.str();
+	emitterInput.geometryCode.resize(geometryCode.size());
+	for(size_t i = 0; i < emitterInput.geometryCode.size(); i++)
+		emitterInput.geometryCode[i] = geometryCode[i].str();
 	return EmitGlslProgram(
 			emitterInput,
 			outputs,
@@ -305,42 +506,175 @@ ProgramGenerator::Variable ProgramGenerator::AddVariable(const VariableInfo& var
 	return hash;
 }
 
-std::vector<ProgramGenerator::Function*> ProgramGenerator::FindFunctions(const std::set<Variable>& inputs, Variable output, bool highQuality)
+std::vector<ProgramGenerator::Function*> ProgramGenerator::FindFunctions(const std::set<Variable>& inputs, Variable output, bool highQuality, size_t& baseGSAffinity)
 {
-	// Find functions providing the needed output:
-	auto result = mFunctions.equal_range(output);
-
-	// Sort found functions by quality, priority, number of inputs:
-	std::vector<Function*> candidateFunctions;
-	for(auto fIt = result.first; fIt != result.second; ++fIt)
-		candidateFunctions.push_back(&(fIt->second));
-
-	CompareFunctions comparator(highQuality);
-	std::sort(candidateFunctions.begin(), candidateFunctions.end(), comparator);
-
-	for(auto cfIt: candidateFunctions)
+	struct StackItem
 	{
-		std::vector<Function*> functions;
-		functions.push_back(cfIt);
-		for(auto vIt: cfIt->inputs)
+		ProgramGenerator::Function* function;
+		std::vector<ProgramGenerator::Function*> functions;
+		std::vector<ProgramGenerator::Function*> candidateFunctions;
+		std::vector<Variable> inputs;
+		size_t gsAffinity;
+	};
+
+	auto invalidDependence = [](const std::vector<StackItem>& executionPathStack,
+								ProgramGenerator::Function* function)
+	{
+
+		for(auto item : executionPathStack)
 		{
-			if(!inputs.count(vIt))
+			//check dependency loop
+			if(item.function == function)
+				return true;
+			
+			//check conflicting dependency
+			if(item.function->stage == function->stage && 
+					item.function->name == function->name)
+				return true;
+		}
+
+		if(!executionPathStack.empty())
+		{
+			//check backward pipline dependency
+			auto parrentFunction = executionPathStack.back().function;
+			if(	(parrentFunction->stage == ProgramGenerator::Function::Stage::kVertexStage ||
+					parrentFunction->stage == ProgramGenerator::Function::Stage::kGeometryStage) &&
+					function->stage == ProgramGenerator::Function::Stage::kFragmentStage)
+				return true;
+			else if(parrentFunction->stage == ProgramGenerator::Function::Stage::kVertexStage &&
+					function->stage == ProgramGenerator::Function::Stage::kGeometryStage)
+				return true;
+			
+			//check dependency from fragment to vertex stage with enabled geometry stage
+			if(function->stage == ProgramGenerator::Function::Stage::kVertexStage &&
+					parrentFunction->stage == ProgramGenerator::Function::Stage::kFragmentStage &&
+					executionPathStack.back().gsAffinity)
+				return true;
+
+			//check dependency on pure function within different pipline stage
+			if(function->pureFunction && function->stage != executionPathStack.back().function->stage)
+				return true;
+		}
+		
+		
+		return false;
+	};
+
+	std::vector<StackItem> executionPathStack;
+	StackItem currentState = {nullptr, {}, FindCandidateFunctions(output, highQuality), {}, baseGSAffinity};
+	while(true)
+	{
+		assert(currentState.functions.empty() || executionPathStack.empty());
+		if(currentState.candidateFunctions.empty())
+		{
+			if(!executionPathStack.empty())
 			{
-				// Input for function not in available inputs: Find function
-				std::vector<Function*> result = FindFunctions(inputs, vIt, highQuality);
-				if(result.empty())
+				// All candidates for this input discarded, thus the parrent function failed to find a candidate for its input.
+				// Start processing the next candidate for a parrent
+				currentState = std::move(executionPathStack.back());
+				currentState.functions.clear();
+				executionPathStack.pop_back();
+				continue;
+			} else
+				// We are back to the root. Finish processing execution path tree
+				break;
+		}
+
+		// Before processing candidate function restore its geometry stage affinity
+		if(!executionPathStack.empty())
+			// Inherit gsAffinity from parrent
+			currentState.gsAffinity = executionPathStack.back().gsAffinity;
+		else
+			// It is a root of the tree. Set its gs affinity to initial value
+			currentState.gsAffinity = baseGSAffinity;
+
+		currentState.function = currentState.candidateFunctions.front();
+		currentState.candidateFunctions.erase(currentState.candidateFunctions.begin());
+		
+		// Handle invalid dependency. If detected, check next candidate
+		if(invalidDependence(executionPathStack, currentState.function))
+			continue;
+		
+		// Check GS affinity if not pure function
+		if(!currentState.function->pureFunction)
+		{
+			if(currentState.gsAffinity != 0 && 
+				currentState.function->stage == Function::Stage::kGeometryStage &&
+				currentState.function->source.size() != currentState.gsAffinity)
+				//This function is not aligned with general geometry shader affinity (number of vertex outputs)
+				continue;
+			else if(currentState.gsAffinity == 0 && 
+					currentState.function->stage == Function::Stage::kGeometryStage)
+				//in case if it is first geometry stage function met on the path, make affinity fit number of sources
+				currentState.gsAffinity = currentState.function->source.size();
+		}
+		
+		currentState.inputs = currentState.function->inputs;
+		currentState.functions = {currentState.function};
+		while(true)
+		{
+
+			if(currentState.inputs.empty())
+			{
+				// Finish processing of inputs				
+
+				if(executionPathStack.empty())
 				{
-					// Could not satisfy all inputs for this function candidate, try next
-					functions.clear();
+					if(!currentState.functions.empty())
+						// We are back to a root function, and execution path is found. 
+						// Finish tree traversal by clearing all candidate functions
+						currentState.candidateFunctions.clear();
 					break;
 				}
-				functions.insert(functions.end(), result.begin(), result.end());
+				
+				if(!currentState.functions.empty())
+				{
+					// This trunk has acceptable dependencys, 
+					// thus pass all found functions to parrent node and 
+					// continue processing other parrent inputs 
+					executionPathStack.back().functions.insert(executionPathStack.back().functions.end(),
+																currentState.functions.begin(),
+																currentState.functions.end());
+					executionPathStack.back().gsAffinity = currentState.gsAffinity;
+					executionPathStack.back().function->inputFunctions[currentState.function->output] = currentState.function;
+					currentState = std::move(executionPathStack.back());
+					executionPathStack.pop_back();
+					continue;
+					
+				} else
+					// Current candidate has no valid dependency chain, process next candidate
+					break;
 			}
+
+			// Process next input
+			auto input = currentState.inputs.front();
+			currentState.inputs.erase(currentState.inputs.begin());
+
+			if(!inputs.count(input))
+			{
+				auto newCandidateFunctions = FindCandidateFunctions(input, highQuality);
+				if(!newCandidateFunctions.empty())
+				{
+					// Push current state and start processing new trunk
+					executionPathStack.push_back(currentState);
+					currentState = StackItem();
+					currentState.gsAffinity = executionPathStack.back().gsAffinity;
+					currentState.candidateFunctions = std::move(newCandidateFunctions);
+					break;
+				} else
+				{
+					// This input is not in shader-inputs, and has no candidates. Process next candidate
+					currentState.functions.clear();
+					break;
+				}
+			}
+			// Exit loops at the beginnig
 		}
-		if(!functions.empty())
-			return functions;
 	}
-	return std::vector<Function*>();
+	
+	assert(executionPathStack.empty());
+	baseGSAffinity = currentState.gsAffinity;
+	return currentState.functions;
 }
 
 void ProgramGenerator::RemoveDuplicates(std::vector<Function*>& functions)
