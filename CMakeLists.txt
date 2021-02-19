@@ -25,5 +25,3 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sample1.glsl
 add_custom_target(copy-shader-example
 	DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/sample1.glsl
 )
-
-install_target_artifacts(molecular-programgenerator)
